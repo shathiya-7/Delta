@@ -95,9 +95,12 @@ export function initShapeGrid(containerOrSelector, options = {}) {
     const startX = (offsetX % cs) - cs;
     const startY = (offsetY % cs) - cs;
 
+    const isLight = typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme') === 'light';
+
     // 1. Draw static grid lines
     ctx.beginPath();
-    ctx.strokeStyle = cfg.lineColor;
+    ctx.strokeStyle = isLight ? '#E3E6EE' : cfg.lineColor;
     ctx.lineWidth = 1;
 
     // Vertical lines
@@ -163,11 +166,15 @@ export function initShapeGrid(containerOrSelector, options = {}) {
       const alpha = Math.max(0, Math.min(1, cell.intensity));
 
       // Cell Fill
-      ctx.fillStyle = `rgba(247, 21, 171, ${(alpha * cfg.fillOpacity).toFixed(3)})`;
+      ctx.fillStyle = isLight
+        ? `rgba(230, 42, 154, ${(alpha * cfg.fillOpacity * 1.2).toFixed(3)})`
+        : `rgba(247, 21, 171, ${(alpha * cfg.fillOpacity).toFixed(3)})`;
       ctx.fillRect(cellX, cellY, cs, cs);
 
       // Glowing Cell Border
-      ctx.strokeStyle = `rgba(146, 1, 203, ${(alpha * 0.75).toFixed(3)})`;
+      ctx.strokeStyle = isLight
+        ? `rgba(157, 59, 209, ${(alpha * 0.6).toFixed(3)})`
+        : `rgba(146, 1, 203, ${(alpha * 0.75).toFixed(3)})`;
       ctx.lineWidth = 1;
       ctx.strokeRect(cellX + 0.5, cellY + 0.5, cs - 1, cs - 1);
     }
@@ -392,7 +399,22 @@ export function initSplitText(target = '[data-split-text]', options = {}) {
       } else if (node.nodeName === 'BR') {
         fragment.appendChild(document.createElement('br'));
       } else if (node.nodeType === 1) {
-        // Nested element (e.g. <span>What comes next.</span>)
+        // Elements with gradient clipping or explicit no-split must remain intact
+        // to prevent child inline-block compositing layers from breaking background-clip: text
+        const isGradientOrUnsplit = (
+          (node.classList && (node.classList.contains('hero-gradient') || node.classList.contains('gradient-text'))) ||
+          (node.hasAttribute && node.hasAttribute('data-no-split')) ||
+          (node.getAttribute && node.getAttribute('data-no-split'))
+        );
+
+        if (isGradientOrUnsplit) {
+          const wrapper = node.cloneNode(true);
+          wrapper.setAttribute('aria-hidden', 'true');
+          fragment.appendChild(wrapper);
+          return;
+        }
+
+        // Nested element (e.g. <span class="hero-line hero-line-main">)
         const wrapper = node.cloneNode(false);
         const subNodes = Array.from(node.childNodes);
         subNodes.forEach((sub) => {

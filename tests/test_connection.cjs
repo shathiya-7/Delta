@@ -914,6 +914,46 @@ test('Zen Mode toggles body class and persists state in storage', async () => {
   assert.equal(mockLocalStorage.getItem('delta_zen_mode'), 'false');
 });
 
+test('Theme toggle toggles data-theme attribute and persists in storage', async () => {
+  const storage = {};
+  const mockLocalStorage = {
+    getItem: k => storage[k] || null,
+    setItem: (k, v) => { storage[k] = String(v); },
+  };
+
+  let themeAttr = null;
+  const mockDocElement = {
+    getAttribute: k => (k === 'data-theme' ? themeAttr : null),
+    setAttribute: (k, v) => { if (k === 'data-theme') themeAttr = v; },
+    removeAttribute: k => { if (k === 'data-theme') themeAttr = null; },
+  };
+
+  function toggleTheme(docEl, store) {
+    const isLight = docEl.getAttribute('data-theme') === 'light';
+    const next = isLight ? 'dark' : 'light';
+    if (next === 'light') {
+      docEl.setAttribute('data-theme', 'light');
+    } else {
+      docEl.removeAttribute('data-theme');
+    }
+    store.setItem('delta_theme', next);
+    return next;
+  }
+
+  // Switch to pastel light mode
+  const t1 = toggleTheme(mockDocElement, mockLocalStorage);
+  assert.equal(t1, 'light');
+  assert.equal(mockDocElement.getAttribute('data-theme'), 'light');
+  assert.equal(mockLocalStorage.getItem('delta_theme'), 'light');
+
+  // Switch back to pitch-black dark mode
+  const t2 = toggleTheme(mockDocElement, mockLocalStorage);
+  assert.equal(t2, 'dark');
+  assert.equal(mockDocElement.getAttribute('data-theme'), null);
+  assert.equal(mockLocalStorage.getItem('delta_theme'), 'dark');
+});
+
+
 
 
 

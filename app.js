@@ -263,6 +263,43 @@ export function initApp() {
   initSplitText('[data-split-text]');
   initBorderGlow('.border-glow');
 
+  // Theme Toggle (Dark pitch-black default, Light pastel)
+  const themeToggle = $('theme-toggle');
+  const themeIcon = $('theme-icon');
+  const themeLabel = $('theme-label');
+
+  function applyTheme(theme) {
+    if (theme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+      if (themeIcon) themeIcon.textContent = '☾';
+      if (themeLabel) themeLabel.textContent = 'Dark';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if (themeIcon) themeIcon.textContent = '☀';
+      if (themeLabel) themeLabel.textContent = 'Light';
+    }
+  }
+
+  function toggleTheme() {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const next = isLight ? 'dark' : 'light';
+    applyTheme(next);
+    try {
+      localStorage.setItem('delta_theme', next);
+    } catch (_) {}
+  }
+
+  try {
+    const savedTheme = localStorage.getItem('delta_theme');
+    if (savedTheme === 'light') {
+      applyTheme('light');
+    }
+  } catch (_) {}
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', toggleTheme);
+  }
+
   // Zen Mode Toggle
   const zenToggle = $('zen-toggle');
   function toggleZenMode() {

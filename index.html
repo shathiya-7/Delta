@@ -35,8 +35,8 @@
   </nav>
   <div class="sidebar-note">
     <span class="little-spark">✳</span>
-    <h3>Small steps.<br>Real-world skills.</h3>
-    <p>Your next opportunity starts with what you learn today.</p>
+    <h3>Real-world skills.</h3>
+    <p>Small steps today. Real proof tomorrow.</p>
   </div>
   <button class="help" id="help-button">ⓘ <span>How Delta works</span> ↗</button>
   <div class="profile">
@@ -53,6 +53,10 @@
   <header>
     <div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumb-current">Overview</strong></div>
     <div class="header-right">
+      <button class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle light or dark theme" title="Toggle theme">
+        <span class="theme-icon" id="theme-icon">☀</span>
+        <span class="theme-label" id="theme-label">Light</span>
+      </button>
       <button class="zen-toggle-btn" id="zen-toggle" aria-label="Toggle Zen Mode" title="Zen Mode (Press Z to toggle)">
         <span class="zen-icon">☯</span>
         <span class="zen-label">Zen Mode</span>
@@ -68,18 +72,19 @@
       <div class="pill-badge">
         <span class="pill-spark">✳</span>
         <span>CURRICULUM INTELLIGENCE</span>
-        <span class="pill-sep">/</span>
-        <span>LIVE MARKET DEMAND</span>
       </div>
-      <h1 data-split-text>What you learn.<br><span>What comes next.</span></h1>
-      <p class="hero-subtext">Connect university coursework directly to entry-level tech requirements. Identify high-demand skill gaps, benchmark against live job postings, and patch coursework with targeted lab exercises.</p>
+      <h1 class="hero-title" data-split-text>
+        <span class="hero-line hero-line-main">What you learn.</span>
+        <span class="hero-line hero-gradient">What comes next.</span>
+      </h1>
+      <p class="hero-subtext">Map your syllabus against live hiring demand. Find the gaps. Build proof.</p>
 
       <div class="workflow-strip" aria-label="How Delta works">
-        <div class="strip-item"><span class="strip-num">01</span><span>Upload syllabus</span></div>
+        <div class="strip-item"><span class="strip-num">01</span><span>Syllabus</span></div>
         <span class="strip-arrow">→</span>
-        <div class="strip-item"><span class="strip-num">02</span><span>Detect market gaps</span></div>
+        <div class="strip-item"><span class="strip-num">02</span><span>Demand</span></div>
         <span class="strip-arrow">→</span>
-        <div class="strip-item"><span class="strip-num">03</span><span>Bridge the distance</span></div>
+        <div class="strip-item"><span class="strip-num">03</span><span>Proof</span></div>
       </div>
     </div>
 
@@ -87,15 +92,15 @@
       <section class="upload-panel border-glow" id="upload">
         <div class="panel-top">
           <span class="panel-tag">START HERE</span>
-          <span class="private-badge">♧ Processed in memory</span>
+          <span class="private-badge">♧ In-memory</span>
         </div>
-        <h2>Upload your curriculum</h2>
-        <p>Drop your course outline or syllabus PDF to map your coursework to real-world job demand.</p>
+        <h2>Upload curriculum</h2>
+        <p>Drop your course outline or syllabus PDF.</p>
 
         <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Choose a curriculum PDF">
           <div class="file-icon">▤<span>PDF</span></div>
-          <strong id="drop-title">Drop your curriculum here</strong>
-          <span id="drop-subtitle">or <u>browse files</u> to get started</span>
+          <strong id="drop-title">Drop syllabus here</strong>
+          <span id="drop-subtitle">or <u>browse files</u></span>
           <small>PDF only · Up to 10 MB</small>
         </div>
         <input type="file" id="file-input" accept=".pdf,application/pdf" hidden>
@@ -119,49 +124,49 @@
             <option value="ml">Machine learning engineer</option>
             <option value="devops">DevOps engineer</option>
           </select>
-          <p>Junior & graduate roles · Indeed & LinkedIn live sample · last 30 days where available</p>
+          <p>Junior roles · Live market sample</p>
         </div>
 
         <p id="analysis-status" role="status" aria-live="polite"></p>
         <p class="error" id="error" role="alert"></p>
 
         <button class="primary-button" id="analyze-button" disabled>Analyze curriculum <span>↗</span></button>
-        <div class="upload-footnote">ⓘ &nbsp; In-memory text extraction. International queries may take up to 90s. No external AI key required.</div>
+        <div class="upload-footnote">ⓘ &nbsp; In-memory text extraction · No external AI key required</div>
       </section>
 
       <aside class="insights-panel border-glow">
         <div class="panel-top">
           <span class="panel-tag">CAPABILITIES</span>
         </div>
-        <h2>Less overwhelm.<br>More direction.</h2>
-        <p>No starting over. Just the right additions to what you are already learning in class.</p>
+        <h2>Direct alignment.</h2>
+        <p class="insights-sub">Coursework to real-world demand.</p>
 
         <div class="capability-item">
           <span class="cap-icon">◎</span>
           <div>
-            <h3>Spot the skill gaps</h3>
-            <p>Connect your coursework to modern tech roles and current employer demand.</p>
+            <h3>Market Alignment</h3>
+            <p>Live entry-level hiring signals.</p>
           </div>
         </div>
 
         <div class="capability-item">
           <span class="cap-icon">▧</span>
           <div>
-            <h3>Learn in bite-sized steps</h3>
-            <p>Practical 40-minute lab outlines that patch right into weekly coursework.</p>
+            <h3>40-Min Labs</h3>
+            <p>Hands-on syllabus gap patches.</p>
           </div>
         </div>
 
         <div class="capability-item">
           <span class="cap-icon">↗</span>
           <div>
-            <h3>Build proof, not just a résumé</h3>
-            <p>Turn what you learn into verifiable GitHub code evidence you can show employers.</p>
+            <h3>Code Evidence</h3>
+            <p>GitHub repo and profile proof.</p>
           </div>
         </div>
 
         <div class="insight-bottom">
-          <span class="tiny-dot"></span> Made for students. Built with faculty in mind.
+          <span class="tiny-dot"></span> Built for students & faculty.
         </div>
       </aside>
     </div>
@@ -173,7 +178,7 @@
 
     <footer>
       <span class="footer-brand">Delta</span>
-      <span>Bridging the distance between knowing and doing.</span>
+      <span>Bridging knowing and doing.</span>
       <span>One skill at a time. ↗</span>
     </footer>
   </main>
@@ -181,11 +186,11 @@
 
 <dialog id="info-dialog" aria-labelledby="dialog-title">
   <button id="close-dialog" class="dialog-close" aria-label="Close dialog">×</button>
-  <span class="eyebrow" id="dialog-eyebrow">WELCOME TO DELTA</span>
-  <h2 id="dialog-title">A bridge to your next chapter.</h2>
+  <span class="eyebrow" id="dialog-eyebrow">DELTA</span>
+  <h2 id="dialog-title">Bridging classroom to career.</h2>
   <div id="dialog-body">
-    <p>Upload a searchable curriculum PDF, choose a target role, and compare its skill mentions against an international sample of job postings. Your PDF is processed in server memory; syllabus text is not sent to job boards or an AI service.</p>
-    <p>Reports include evidence, source availability, skill gaps, and optional 40-minute lab outlines. Faculty must review suggestions. GitHub verification and accounts are planned; they are not implemented.</p>
+    <p>Upload a searchable curriculum PDF, select a role, and inspect skill coverage against live hiring demand. Processing is local and in-memory; no syllabus text is transmitted to third-party AI services.</p>
+    <p>Generates actionable evidence, priority skill gaps, and 40-minute lab outlines.</p>
   </div>
   <button class="primary-button" id="dialog-done">Got it <span>↗</span></button>
 </dialog>
