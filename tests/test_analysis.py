@@ -43,8 +43,43 @@ def test_pdf_evidence_and_outcomes():
 def test_alias_boundaries():
     assert 'Java' not in skills('JavaScript for web pages')
     assert 'Git' not in skills('digital acquisition')
+    assert 'Git' not in skills('GitHub and GitLab repositories')
     assert 'SQL' not in skills('PostgreSQL')
-    assert {'C++', 'CI/CD', 'Git', 'Node.js'} <= skills('C++, CI/CD, GitHub and Node.js')
+    assert {'C++', 'CI/CD', 'Node.js'} <= skills('C++, CI/CD, GitHub and Node.js')
+    assert 'Git' in skills('Use Git for version control')
+
+
+def test_data_analyst_skill_aliases():
+    assert {
+        'Microsoft Excel',
+        'Tableau',
+        'Power BI',
+        'Matplotlib',
+        'Seaborn',
+    } <= skills('Microsoft Excel, Tableau, Power BI, Matplotlib, and Seaborn')
+    assert 'Power BI' not in skills('powerful visualizations')
+
+
+def test_role_title_filters_reject_broad_keyword_matches():
+    cases = [
+        ('backend', 'Junior Software Sales Representative', False),
+        ('backend', 'Junior Python Developer', True),
+        ('frontend', 'Junior React Sales Associate', False),
+        ('frontend', 'Junior React Developer', True),
+        ('fullstack', 'Junior Software Engineer', False),
+        ('fullstack', 'Junior Full Stack Developer', True),
+        ('data', 'Junior Data Scientist', False),
+        ('data', 'Junior Data Analyst', True),
+        ('ml', 'Junior Data Science Associate', False),
+        ('ml', 'Junior Machine Learning Engineer', True),
+        ('devops', 'Junior Cloud Sales Associate', False),
+        ('devops', 'Junior Cloud Engineer', True),
+    ]
+
+    for role, title, should_match in cases:
+        jobs, excluded = normalize([row(title=title)], role)
+        assert bool(jobs) is should_match, (role, title)
+        assert excluded['irrelevant_role'] == (0 if should_match else 1)
 
 
 def test_exclusions_dedup_and_demand():
@@ -184,13 +219,20 @@ def test_report_download_is_valid_pdf_and_expires(monkeypatch):
 
 
 def test_search_parameters_do_not_default_every_market_to_india(monkeypatch):
-    import jobspy
+    import sys
+    from types import ModuleType
     from backend.market import scrape_board
     captured = []
+
     class Frame:
         attrs = {}
-        def to_dict(self, mode): return []
-    monkeypatch.setattr(jobspy, 'scrape_jobs', lambda **kw: captured.append(kw) or Frame())
+
+        def to_dict(self, mode):
+            return []
+
+    jobspy = ModuleType('jobspy')
+    jobspy.scrape_jobs = lambda **kw: captured.append(kw) or Frame()
+    monkeypatch.setitem(sys.modules, 'jobspy', jobspy)
     scrape_board('indeed', 'Backend developer', 'Canada')
     scrape_board('linkedin', 'Backend developer', 'Worldwide')
     assert captured[0]['country_indeed'] == captured[0]['location'] == 'Canada'

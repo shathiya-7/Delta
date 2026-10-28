@@ -11,12 +11,12 @@ from urllib.parse import urlsplit, urlunsplit
 from .skills import skills
 
 ROLES = {
- 'backend': ('Backend developer', r'backend|back.end|software|python|java|node|full.stack'),
- 'frontend': ('Frontend developer', r'front.end|frontend|react|angular|web developer'),
- 'fullstack': ('Full stack developer', r'full.stack|fullstack|software|web developer'),
- 'data': ('Data analyst', r'data analyst|business analyst|analytics|data science'),
- 'ml': ('Machine learning engineer', r'machine learning|\bml\b|data scien|\bai\b'),
- 'devops': ('DevOps engineer', r'devops|cloud|platform engineer|site reliability'),
+ 'backend': ('Backend developer', r'\bback[\s.-]?end\b|\bserver[\s.-]?side\b|\b(?:python|java|node(?:\.js)?) developer\b|\bapi developer\b'),
+ 'frontend': ('Frontend developer', r'\bfront[\s.-]?end\b|\b(?:react|angular) developer\b|\bweb developer\b|\bui engineer\b'),
+ 'fullstack': ('Full stack developer', r'\bfull[\s.-]?stack\b'),
+ 'data': ('Data analyst', r'\bdata analyst\b|\bbusiness analyst\b|\banalytics analyst\b'),
+ 'ml': ('Machine learning engineer', r'\bmachine learning\b|\bml engineer\b|\bartificial intelligence engineer\b'),
+ 'devops': ('DevOps engineer', r'\bdevops\b|\bcloud engineer\b|\bplatform engineer\b|\bsite reliability engineer\b'),
 }
 CACHE = {}
 CACHE_LOCK = threading.Lock()
