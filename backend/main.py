@@ -5,15 +5,19 @@ import threading
 import secrets
 import time
 from collections import OrderedDict
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from .contracts import HealthResponse, RoleOption
 from .engine import parse_pdf, build_report
 from .market import ROLES, collect_market
 from .pdf_report import generate_pdf, generate_summary_pdf
 
 app = FastAPI(title='Delta curriculum analysis')
+API_VERSION = '1.0.0'
 # Allow local development previews to use the local API; do not enable arbitrary websites.
 app.add_middleware(
     CORSMiddleware,
@@ -21,15 +25,59 @@ app.add_middleware(
     allow_methods=['GET', 'POST'],
     allow_headers=['Content-Type'],
 )
+
+
+def error_response(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            'error': {
+                'code': code,
+                'message': message,
+                'retryable': status_code == 429 or status_code >= 500,
+            }
+        },
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_error(_request: Request, exc: StarletteHTTPException):
+    codes = {
+        404: 'not_found',
+        413: 'file_too_large',
+        422: 'invalid_request',
+        429: 'analysis_busy',
+    }
+    message = exc.detail if isinstance(exc.detail, str) else 'The request could not be completed.'
+    return error_response(exc.status_code, codes.get(exc.status_code, 'http_error'), message)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(_request: Request, _exc: RequestValidationError):
+    return error_response(422, 'invalid_request', 'Request data is invalid.')
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(_request: Request, exc: Exception):
+    logging.error(
+        'Unhandled request error',
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return error_response(500, 'internal_error', 'The server could not complete the request.')
+
 ROOT = Path(__file__).resolve().parent.parent
 ACTIVE = threading.BoundedSemaphore(2)
 REPORTS = OrderedDict()
 REPORT_LOCK = threading.Lock()
 REPORT_TTL = 1800
 
-@app.get('/api/health')
+@app.get('/api/health', response_model=HealthResponse)
 def health():
-    return {'status': 'ok', 'service': 'bridgelabs', 'ai_required': False, 'market': 'JobSpy / International'}
+    return {'status': 'ok', 'service': 'delta', 'version': API_VERSION}
+
+@app.get('/api/roles', response_model=list[RoleOption])
+def list_roles():
+    return [{'id': role_id, 'label': details[0]} for role_id, details in ROLES.items()]
 
 @app.post('/api/analyze')
 async def analyze(file: UploadFile = File(...), role: str = Form('backend')):
