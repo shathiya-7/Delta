@@ -85,7 +85,7 @@ export function initDialog(elements) {
  * @param {object} options - State accessors
  */
 export function initNavigation(elements, options = {}) {
-  const { navButtons, curriculaSection, roadmapSection, resultsSection, dialogHelper } = elements;
+  const { navButtons, curriculaSection, roadmapSection, githubSection, resultsSection, dialogHelper } = elements;
   if (!navButtons) return;
 
   const breadcrumbEl = document.getElementById('breadcrumb-current');
@@ -100,6 +100,7 @@ export function initNavigation(elements, options = {}) {
     navButtons.forEach(b => b.classList.toggle('active', b.dataset.view === 'home'));
     if (curriculaSection) curriculaSection.hidden = true;
     if (roadmapSection) roadmapSection.hidden = true;
+    if (githubSection) githubSection.hidden = true;
     const currentReport = options.getReport ? options.getReport() : null;
     if (resultsSection && currentReport) {
       resultsSection.hidden = false;
@@ -112,13 +113,6 @@ export function initNavigation(elements, options = {}) {
     button.addEventListener('click', () => {
       const view = button.dataset.view;
 
-      if (view === 'github') {
-        if (dialogHelper && dialogHelper.showGitHubDialog) {
-          dialogHelper.showGitHubDialog();
-        }
-        return;
-      }
-
       navButtons.forEach(b => b.classList.toggle('active', b === button));
 
       if (view === 'home') {
@@ -128,6 +122,7 @@ export function initNavigation(elements, options = {}) {
 
       if (view === 'curricula') {
         if (roadmapSection) roadmapSection.hidden = true;
+        if (githubSection) githubSection.hidden = true;
         if (resultsSection) resultsSection.hidden = true;
         updateBreadcrumb('My curricula');
         if (curriculaSection) {
@@ -142,7 +137,7 @@ export function initNavigation(elements, options = {}) {
                 <div class="file-icon" style="margin-bottom: 0;">▤<span>PDF</span></div>
                 <div>
                   <strong style="font-size: 13px;">${selectedFile.name}</strong>
-                  <p style="margin: 4px 0 0; color: #78856e; font-size: 11px;">
+                  <p style="margin: 4px 0 0; color: var(--text-muted); font-size: 11px;">
                     ${(selectedFile.size / 1024).toFixed(1)} KB · ${currentReport ? 'Analyzed' : 'Ready for analysis'}
                   </p>
                 </div>
@@ -160,7 +155,7 @@ export function initNavigation(elements, options = {}) {
               <span class="tag">MY CURRICULA</span>
               <h2>Your learning starts here.</h2>
               <div class="empty-state-box">
-                <p style="font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px;">No curriculum uploaded yet</p>
+                <p style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">No curriculum uploaded yet</p>
                 <p>Upload your course outline or syllabus PDF on the Overview tab to inspect market skill demand, identify potential gaps, and generate learning roadmaps.</p>
                 <button class="primary-button" id="curricula-go-upload" style="max-width: 240px; margin: 16px auto 0;">Go to Upload <span>↗</span></button>
               </div>
@@ -177,10 +172,22 @@ export function initNavigation(elements, options = {}) {
 
       if (view === 'roadmap') {
         if (curriculaSection) curriculaSection.hidden = true;
+        if (githubSection) githubSection.hidden = true;
         if (resultsSection) resultsSection.hidden = true;
         updateBreadcrumb('Learning roadmap');
         const currentReport = options.getReport ? options.getReport() : null;
         renderRoadmapView(currentReport, roadmapSection, switchToHome);
+        return;
+      }
+
+      if (view === 'github') {
+        if (curriculaSection) curriculaSection.hidden = true;
+        if (roadmapSection) roadmapSection.hidden = true;
+        if (resultsSection) resultsSection.hidden = true;
+        updateBreadcrumb('GitHub portfolio');
+        if (options.onRenderGitHub && githubSection) {
+          options.onRenderGitHub(githubSection, switchToHome);
+        }
       }
     });
   });

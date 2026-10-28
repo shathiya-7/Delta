@@ -3,6 +3,18 @@ import { resolveAnalysisServer, analyzeCurriculum } from './js/api.js';
 import { renderReport, esc } from './js/render.js';
 import { initUpload } from './js/upload.js';
 import { initDialog, initNavigation } from './js/ui.js';
+import {
+  parseGitHubTarget,
+  fetchGitHubTarget,
+  analyzeGitHubTarget,
+  renderGitHubView,
+} from './js/github.js';
+import {
+  initShapeGrid,
+  initSplitText,
+  initBorderGlow,
+  prefersReducedMotion,
+} from './js/effects.js';
 
 // DOM helper
 const $ = id => document.getElementById(id);
@@ -29,6 +41,86 @@ export function initApp() {
   const infoDialog = $('info-dialog');
   const curriculaView = $('curricula-view');
   const roadmapView = $('roadmap-view');
+  const githubView = $('github-view');
+
+  // GitHub Portfolio State
+  const gitHubState = {
+    inputUrl: '',
+    data: null,
+    loading: false,
+    error: null,
+  };
+
+  async function handleGitHubSearch(inputUrl) {
+    if (!githubView) return;
+    gitHubState.inputUrl = inputUrl;
+    gitHubState.error = null;
+
+    if (!inputUrl) {
+      gitHubState.data = null;
+      gitHubState.loading = false;
+      renderGitHubView(
+        githubView,
+        { ...gitHubState, curriculumReport: currentReport },
+        {
+          onSearch: handleGitHubSearch,
+          onGoToOverview: () => navManager.switchToHome(),
+          onReset: () => handleGitHubSearch(''),
+        }
+      );
+      return;
+    }
+
+    const parsed = parseGitHubTarget(inputUrl);
+    if (!parsed.valid) {
+      gitHubState.error = parsed.error;
+      gitHubState.loading = false;
+      renderGitHubView(
+        githubView,
+        { ...gitHubState, curriculumReport: currentReport },
+        {
+          onSearch: handleGitHubSearch,
+          onGoToOverview: () => navManager.switchToHome(),
+          onReset: () => handleGitHubSearch(''),
+        }
+      );
+      return;
+    }
+
+    gitHubState.loading = true;
+    renderGitHubView(
+      githubView,
+      { ...gitHubState, curriculumReport: currentReport },
+      {
+        onSearch: handleGitHubSearch,
+        onGoToOverview: () => navManager.switchToHome(),
+        onReset: () => handleGitHubSearch(''),
+      }
+    );
+
+    try {
+      const rawData = await fetchGitHubTarget(parsed);
+      const analysis = analyzeGitHubTarget(rawData, currentReport);
+      gitHubState.data = analysis;
+      gitHubState.loading = false;
+      gitHubState.error = null;
+    } catch (err) {
+      gitHubState.loading = false;
+      gitHubState.error = err.message || 'Failed to analyze GitHub portfolio.';
+      gitHubState.data = null;
+    }
+
+    renderGitHubView(
+      githubView,
+      { ...gitHubState, curriculumReport: currentReport },
+      {
+        onSearch: handleGitHubSearch,
+        onGoToOverview: () => navManager.switchToHome(),
+        onReset: () => handleGitHubSearch(''),
+      }
+    );
+    initBorderGlow(githubView.querySelectorAll('.github-search-card, .github-profile-card'));
+  }
 
   const uploadManager = initUpload(
     {
@@ -94,6 +186,7 @@ export function initApp() {
       }
 
       renderReport(data, base, resultsEl);
+      initBorderGlow(resultsEl.querySelectorAll('.chart-card, .result-card'));
       statusEl.textContent = CONFIG.MESSAGES.ANALYSIS_COMPLETE;
     } catch (error) {
       const isTimeout = error.name === 'AbortError';
@@ -138,19 +231,72 @@ export function initApp() {
     closeButtons: [$('close-dialog'), $('dialog-done')],
   });
 
-  initNavigation(
+  const navManager = initNavigation(
     {
       navButtons: document.querySelectorAll('[data-view]'),
       curriculaSection: curriculaView,
       roadmapSection: roadmapView,
+      githubSection: githubView,
       resultsSection: resultsEl,
       dialogHelper,
     },
     {
       getSelectedFile: () => uploadManager.getSelectedFile(),
       getReport: () => currentReport,
+      onRenderGitHub: (container, switchToHome) => {
+        renderGitHubView(
+          container,
+          { ...gitHubState, curriculumReport: currentReport },
+          {
+            onSearch: handleGitHubSearch,
+            onGoToOverview: switchToHome,
+            onReset: () => handleGitHubSearch(''),
+          }
+        );
+        initBorderGlow(container.querySelectorAll('.github-search-card, .github-profile-card'));
+      },
     }
   );
+
+  // Initialize ReactBits visual effects
+  initShapeGrid('#shape-grid-bg');
+  initSplitText('[data-split-text]');
+  initBorderGlow('.border-glow');
+
+  // Zen Mode Toggle
+  const zenToggle = $('zen-toggle');
+  function toggleZenMode() {
+    const isZen = document.body.classList.toggle('zen-mode');
+    try {
+      localStorage.setItem('delta_zen_mode', isZen ? 'true' : 'false');
+    } catch (_) {}
+    if (zenToggle) {
+      zenToggle.classList.toggle('active', isZen);
+      const label = zenToggle.querySelector('.zen-label');
+      if (label) label.textContent = isZen ? 'Exit Zen' : 'Zen Mode';
+    }
+  }
+
+  try {
+    if (localStorage.getItem('delta_zen_mode') === 'true') {
+      toggleZenMode();
+    }
+  } catch (_) {}
+
+  if (zenToggle) {
+    zenToggle.addEventListener('click', toggleZenMode);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (
+      (e.key === 'z' || e.key === 'Z') &&
+      !e.ctrlKey && !e.metaKey && !e.altKey &&
+      !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName) &&
+      !document.activeElement?.isContentEditable
+    ) {
+      toggleZenMode();
+    }
+  });
 }
 
 // Auto-initialize when running in browser
@@ -168,3 +314,21 @@ export { resolveAnalysisServer, analyzeCurriculum, getReportDownloadUrl } from '
 export { renderReport, renderRoadmapView, filterSkillDemand, esc, bullets, jobLink } from './js/render.js';
 export { initUpload, validatePdfFile } from './js/upload.js';
 export { initDialog, initNavigation } from './js/ui.js';
+export {
+  parseGitHubTarget,
+  fetchGitHubTarget,
+  analyzeGitHubTarget,
+  fetchGitHubPortfolio,
+  analyzePortfolio,
+  renderGitHubView,
+  validateGitHubUsername,
+  normalizeGitHubUsername,
+  decodeBase64Utf8,
+  clearPortfolioCache,
+} from './js/github.js';
+export {
+  initShapeGrid,
+  initSplitText,
+  initBorderGlow,
+  prefersReducedMotion,
+} from './js/effects.js';
