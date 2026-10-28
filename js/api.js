@@ -98,5 +98,8 @@ export async function analyzeCurriculum(file, role, signal, apiBase, options = {
  * @returns {string} Download URL
  */
 export function getReportDownloadUrl(apiBase, reportId, version = 'full') {
+  if (!apiBase || !reportId) {
+    throw new Error('Backend base URL and report ID are required to construct download URL.');
+  }
   return `${apiBase}${CONFIG.ENDPOINTS.REPORT_PDF(reportId)}?version=${encodeURIComponent(version)}`;
 }

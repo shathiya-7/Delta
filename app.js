@@ -48,9 +48,18 @@ export function initApp() {
     },
     {
       isBusy: () => busy,
-      onFileChange: () => {
-        // Clear error and retry controls if a new file is chosen
+      onFileChange: (file) => {
+        // Clear error and retry controls if a file is chosen or removed
         if (errorEl) errorEl.innerHTML = '';
+        currentReport = null;
+        if (resultsEl) {
+          resultsEl.hidden = true;
+          resultsEl.innerHTML = '';
+        }
+        if (roadmapCount) {
+          roadmapCount.hidden = true;
+          roadmapCount.textContent = '0';
+        }
       },
     }
   );
@@ -123,7 +132,7 @@ export function initApp() {
   analyzeBtn.addEventListener('click', performAnalysis);
 
   // Dialog and Navigation
-  initDialog({
+  const dialogHelper = initDialog({
     dialog: infoDialog,
     openButtons: [$('help-button'), $('profile-button')],
     closeButtons: [$('close-dialog'), $('dialog-done')],
@@ -134,7 +143,8 @@ export function initApp() {
       navButtons: document.querySelectorAll('[data-view]'),
       curriculaSection: curriculaView,
       roadmapSection: roadmapView,
-      dialog: infoDialog,
+      resultsSection: resultsEl,
+      dialogHelper,
     },
     {
       getSelectedFile: () => uploadManager.getSelectedFile(),

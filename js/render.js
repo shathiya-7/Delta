@@ -12,11 +12,29 @@ export const esc = value =>
   );
 
 /**
+ * Formats an ISO date string into a localized readable date.
+ * @param {string|number|null} iso - ISO date or timestamp
+ * @returns {string} Localized date string or fallback
+ */
+export const formatDate = iso => {
+  if (!iso) return 'recently';
+  try {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? 'recently' : d.toLocaleString();
+  } catch {
+    return 'recently';
+  }
+};
+
+/**
  * Renders an array of items as an unordered HTML list with escaped text.
  * @param {Array<string>} items - Items to render
  * @returns {string} HTML `<ul>` markup
  */
-export const bullets = items => `<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+export const bullets = items =>
+  Array.isArray(items) && items.length
+    ? `<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+    : '';
 
 /**
  * Safely generates an anchor tag for external job links, ensuring safe protocol.
@@ -52,9 +70,10 @@ let tableFilterState = {
  */
 export function filterSkillDemand(skills, query = '', statusFilter = 'all') {
   const q = (query || '').trim().toLowerCase();
-  return (skills || []).filter(item => {
-    const matchesQuery = !q || item.skill.toLowerCase().includes(q);
-    const isGap = item.curriculum_status === 'not found';
+  return (Array.isArray(skills) ? skills : []).filter(item => {
+    const skillName = (item?.skill || '').toLowerCase();
+    const matchesQuery = !q || skillName.includes(q);
+    const isGap = item?.curriculum_status === 'not found';
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'gap' && isGap) ||
@@ -84,7 +103,7 @@ export function renderSkillDemandChart(skillDemand, totalJobs, currentFilter = '
     `;
   }
 
-  const maxShare = Math.max(...displayItems.map(d => d.share_percent), 10);
+  const maxShare = Math.max(...displayItems.map(d => Number(d?.share_percent) || 0), 10);
 
   return `
     <div class="chart-bars" role="region" aria-label="Skill demand comparison chart">
@@ -92,27 +111,33 @@ export function renderSkillDemandChart(skillDemand, totalJobs, currentFilter = '
         .map(d => {
           const isCovered = d.curriculum_status === 'mentioned';
           const fillClass = isCovered ? 'fill-covered' : 'fill-gap';
-          const badgeText = isCovered ? 'Mentioned' : 'Possible gap';
-          const widthPct = Math.min(100, Math.max(5, (d.share_percent / maxShare) * 100));
+          const share = Number(d.share_percent) || 0;
+          const widthPct = share > 0 ? Math.min(100, Math.max(4, (share / maxShare) * 100)) : 0;
+          const jobCount = Number(d.job_count) || 0;
 
           return `
-          <div class="chart-bar-item" data-skill="${esc(d.skill)}">
+          <div class="chart-bar-item" data-skill="${esc(d.skill)}" tabindex="0" role="button" aria-label="${esc(d.skill)}: ${share}% demand, ${isCovered ? 'mentioned in syllabus' : 'possible gap'}">
             <div class="chart-bar-label" title="${esc(d.skill)}">
               <span>${esc(d.skill)}</span>
             </div>
             <div class="chart-track">
-              <div class="chart-fill ${fillClass}" style="width: ${widthPct}%;" role="progressbar" aria-valuenow="${d.share_percent}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(d.skill)}: ${d.share_percent}%">
-                ${d.share_percent >= 12 ? `${d.share_percent}%` : ''}
+              <div class="chart-fill ${fillClass}" style="width: ${widthPct}%;" role="progressbar" aria-valuenow="${share}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(d.skill)}: ${share}%">
+                ${share >= 12 ? `${share}%` : ''}
               </div>
             </div>
             <div class="chart-value">
-              <strong>${d.share_percent}%</strong> <small>(${d.job_count} ${d.job_count === 1 ? 'job' : 'jobs'})</small>
+              <strong>${share}%</strong> <small>(${jobCount} ${jobCount === 1 ? 'job' : 'jobs'})</small>
             </div>
           </div>
           `;
         })
         .join('')}
     </div>
+    ${
+      filtered.length > 12
+        ? `<div class="chart-footer-note">Showing top 12 of ${filtered.length} in-demand skills in chart. Use the table below for the complete searchable list.</div>`
+        : ''
+    }
   `;
 }
 
@@ -163,14 +188,17 @@ function renderSkillTableRows(items, totalJobs) {
         `
         : `<small style="color: #929c87;">No excerpt</small>`;
 
+      const jobCount = Number(d.job_count) || 0;
+      const share = Number(d.share_percent) || 0;
+
       return `
-        <tr id="skill-row-${esc(d.skill).replace(/\s+/g, '-')}">
-          <td>
+        <tr data-skill-name="${esc(d.skill)}">
+          <td style="word-break: break-word;">
             <strong>${esc(d.skill)}</strong>
           </td>
           <td>
-            <strong>${d.job_count} / ${totalJobs}</strong>
-            <small style="color: #798570; display: inline-block; margin-left: 6px;">(${d.share_percent}%)</small>
+            <strong>${jobCount} / ${totalJobs}</strong>
+            <small style="color: #798570; display: inline-block; margin-left: 6px;">(${share}%)</small>
           </td>
           <td>${statusBadge}</td>
           <td>${evidenceHtml}</td>
@@ -188,52 +216,71 @@ function renderSkillTableRows(items, totalJobs) {
  * @param {HTMLElement} section - Container element (e.g. `#results`)
  */
 export function renderReport(r, apiBase, section) {
-  const stats = r.summary;
-  const totalJobs = stats.analyzed_jobs;
+  if (!section || !r) return;
+
+  const stats = r.summary || {};
+  const totalJobs = Number(stats.analyzed_jobs) || 0;
+  const detectedSkills = Number(stats.detected_curriculum_skills) || 0;
+  const missingSkills = Number(stats.missing_skills) || 0;
+  const mentionAlignment =
+    stats.mention_alignment_percent !== null && stats.mention_alignment_percent !== undefined
+      ? Number(stats.mention_alignment_percent)
+      : null;
+
+  const market = r.market || {};
+  const curriculum = r.curriculum || {};
+  const gaps = Array.isArray(r.gaps) ? r.gaps : [];
+  const skillDemand = Array.isArray(r.skill_demand) ? r.skill_demand : [];
+  const labPatches = Array.isArray(r.lab_patches) ? r.lab_patches : [];
+  const jobs = Array.isArray(r.jobs) ? r.jobs : [];
+  const warnings = Array.isArray(r.warnings) ? r.warnings : [];
+  const limitations = Array.isArray(r.limitations) ? r.limitations : [];
 
   // Reset filter state for new report
   tableFilterState = { searchQuery: '', statusFilter: 'all' };
 
-  const gapsCount = r.gaps?.length || 0;
-  const mentionedCount = r.skill_demand?.filter(s => s.curriculum_status === 'mentioned').length || 0;
-  const totalSkills = r.skill_demand?.length || 0;
+  const gapsCount = gaps.length;
+  const mentionedCount = skillDemand.filter(s => s.curriculum_status === 'mentioned').length;
+  const totalSkills = skillDemand.length;
+
+  const formattedCollectedAt = formatDate(market.collected_at || r.generated_at);
 
   section.innerHTML = `
-  <span class="tag">INTERNATIONAL · LIVE JOB SAMPLE${r.market.cached ? ' · CACHED' : ''}</span>
+  <span class="tag">INTERNATIONAL · LIVE JOB SAMPLE${market.cached ? ' · CACHED' : ''}</span>
   <h2>Your curriculum, compared with hiring demand.</h2>
-  <p>${esc(r.filename)} · ${esc(r.role)} · ${esc(r.market.location_query)}<br>
-  Collected ${esc(new Date(r.market.collected_at).toLocaleString())} · ${r.curriculum.page_count} PDF pages</p>
+  <p>${esc(r.filename || 'Curriculum')} · ${esc(r.role || 'Role')} · ${esc(market.location_query || 'International sample')}<br>
+  Collected ${esc(formattedCollectedAt)} · ${curriculum.page_count || 1} PDF pages</p>
 
   <div class="report-downloads" aria-label="Download analysis reports">
-    <button id="download-report" class="primary-button">Download full report (PDF) <span>↓</span></button>
-    <button id="download-summary" class="primary-button secondary-button">Download Executive Summary (PDF) <span>↓</span></button>
+    <button id="download-report" class="primary-button" ${!r.report_id ? 'disabled' : ''}>Download full report (PDF) <span>↓</span></button>
+    <button id="download-summary" class="primary-button secondary-button" ${!r.report_id ? 'disabled' : ''}>Download Executive Summary (PDF) <span>↓</span></button>
   </div>
   <p class="download-note">Full report: all evidence and lab details. Executive Summary: a two-page overview of findings and next steps.</p>
   <p class="download-note">Downloads are available for 30 minutes, until the server restarts, or until newer reports replace them.</p>
 
   <div class="result-grid">
     <article class="result-card">
-      <h3>${stats.analyzed_jobs} usable jobs</h3>
-      <p>${r.market.fetched_count} fetched before relevance, seniority, date and duplicate filtering.</p>
+      <h3>${totalJobs} usable jobs</h3>
+      <p>${market.fetched_count || 0} fetched before relevance, seniority, date and duplicate filtering.</p>
     </article>
     <article class="result-card">
-      <h3>${stats.mention_alignment_percent === null ? 'Insufficient evidence' : stats.mention_alignment_percent + '% mention coverage'}</h3>
+      <h3>${mentionAlignment === null ? 'Insufficient evidence' : mentionAlignment + '% mention coverage'}</h3>
       <p>Demand-weighted syllabus mentions. This is not a student readiness score.</p>
     </article>
     <article class="result-card">
-      <h3>${stats.missing_skills} possible gaps</h3>
-      <p>${stats.detected_curriculum_skills} catalog skills mentioned in the PDF. Missing mentions need faculty confirmation.</p>
+      <h3>${missingSkills} possible gaps</h3>
+      <p>${detectedSkills} catalog skills mentioned in the PDF. Missing mentions need faculty confirmation.</p>
     </article>
   </div>
 
-  ${!stats.analyzed_jobs ? '<p class="report-warning">No usable live postings were returned. No demand score or market-backed recommendations can be produced. Retry later to collect a fresh sample.</p>' : ''}
-  ${stats.analyzed_jobs > 0 && stats.analyzed_jobs < 15 ? '<p class="report-warning" style="background:#fffbe6; border-left: 4px solid #e2b93b;">⚠ Fewer than 15 usable postings were collected: interpret percentages and gap priorities cautiously.</p>' : ''}
+  ${!totalJobs ? '<p class="report-warning">No usable live postings were returned. No demand score or market-backed recommendations can be produced. Retry later to collect a fresh sample.</p>' : ''}
+  ${totalJobs > 0 && totalJobs < 15 ? '<p class="report-warning" style="background:#fffbe6; border-left: 4px solid #e2b93b;">⚠ Fewer than 15 usable postings were collected: interpret percentages and gap priorities cautiously.</p>' : ''}
 
   <!-- Coverage & Status Nuance Explainer -->
   <div class="coverage-explainer">
     <strong>Understanding curriculum coverage and skill statuses:</strong><br>
-    • <strong>Mention coverage (${stats.mention_alignment_percent !== null ? stats.mention_alignment_percent + '%' : 'N/A'})</strong> measures the demand-weighted proportion of in-demand catalog skills explicitly identified in your syllabus PDF text.<br>
-    • <span class="status-badge badge-covered" style="font-size:9px;">Mentioned in syllabus</span>: Found in the extracted text.<br>
+    • <strong>Mention coverage (${mentionAlignment !== null ? mentionAlignment + '%' : 'N/A'})</strong> measures the demand-weighted proportion of in-demand catalog skills explicitly identified in your syllabus PDF text.<br>
+    • <span class="status-badge badge-covered" style="font-size:9px;">Mentioned in syllabus</span>: Explicitly matched in the extracted PDF text.<br>
     • <span class="status-badge badge-gap" style="font-size:9px;">Possible gap (not in text)</span>: High-demand industry skill not detected in the searchable text. This highlights topics for faculty review—it is <em>never</em> proof that a topic is not taught or that theoretical foundations are absent.
   </div>
 
@@ -248,7 +295,7 @@ export function renderReport(r, apiBase, section) {
       </div>
     </div>
     <div id="chart-content">
-      ${renderSkillDemandChart(r.skill_demand, totalJobs, 'all')}
+      ${renderSkillDemandChart(skillDemand, totalJobs, 'all')}
     </div>
   </div>
 
@@ -279,25 +326,25 @@ export function renderReport(r, apiBase, section) {
         </tr>
       </thead>
       <tbody id="skill-table-body">
-        ${renderSkillTableRows(r.skill_demand, totalJobs)}
+        ${renderSkillTableRows(skillDemand, totalJobs)}
       </tbody>
     </table>
   </div>
 
   <h3>Prioritized gaps (${gapsCount})</h3>
   ${
-    r.gaps?.length
-      ? r.gaps
+    gaps.length
+      ? gaps
           .map(
             g => `
     <details>
       <summary>
         <strong>${esc(g.skill)}</strong> · 
-        <span class="badge-priority priority-${esc(g.priority)}">${esc(g.priority)} priority</span> · 
-        ${esc(g.category)} · 
-        <strong>${g.share_percent}%</strong> of sample
+        <span class="badge-priority priority-${esc(g.priority)}">${esc(g.priority || 'Exploratory')} priority</span> · 
+        ${esc(g.category || 'General')} · 
+        <strong>${g.share_percent || 0}%</strong> of sample
       </summary>
-      <p>${esc(g.interpretation)}</p>
+      <p>${esc(g.interpretation || 'Not found in extracted text; this does not prove the skill is not taught.')}</p>
       <p>${
         g.syllabus_anchor
           ? `Related foundation on p.${g.syllabus_anchor.page}: <em>${esc(g.syllabus_anchor.excerpt)}</em>`
@@ -310,7 +357,7 @@ export function renderReport(r, apiBase, section) {
       }
       <div style="margin-top: 10px;">
         <strong>Supporting market excerpts (${g.evidence?.length || 0}):</strong>
-        ${g.evidence.map(e => `<blockquote>${esc(e.excerpt)}<br>${jobLink(e.url, 'View supporting job posting')}</blockquote>`).join('')}
+        ${(g.evidence || []).map(e => `<blockquote>${esc(e.excerpt)}<br>${jobLink(e.url, 'View supporting job posting')}</blockquote>`).join('')}
       </div>
     </details>`
           )
@@ -318,22 +365,22 @@ export function renderReport(r, apiBase, section) {
       : '<p class="report-warning" style="background:#f4f7ed;">No market-backed missing skills identified. All detected in-demand skills have mentions in the syllabus.</p>'
   }
 
-  <h3>Optional weekly lab extensions (${r.lab_patches?.length || 0})</h3>
+  <h3>Optional weekly lab extensions (${labPatches.length})</h3>
   <p>Keep the original theory and outcomes. These 40-minute task outlines require faculty review and prepared starter environments.</p>
   <div class="result-grid">
-    ${r.lab_patches
+    ${labPatches
       .map(
         l => `
       <article class="result-card">
         <span>40 MINUTES · FACULTY REVIEW</span>
         <h3>${esc(l.title)}</h3>
-        <p>Related syllabus topic: p.${l.page}${l.course_outcome ? ' · ' + esc(l.course_outcome.id) : ''}</p>
+        <p>Related syllabus topic: p.${l.page || '?'}${l.course_outcome ? ' · ' + esc(l.course_outcome.id) : ''}</p>
         <p>${esc(l.prerequisites)}</p>
-        ${bullets(l.tasks)}
+        ${bullets(l.tasks || [])}
         <h4>Suggested rubric</h4>
-        ${bullets(Object.entries(l.rubric).map(([k, v]) => `${k}: ${v}%`))}
+        ${bullets(Object.entries(l.rubric || {}).map(([k, v]) => `${k}: ${v}%`))}
         <h4>Verification checklist</h4>
-        ${bullets(l.verification_checklist)}
+        ${bullets(l.verification_checklist || [])}
         <p>${esc(l.faculty_notes)}</p>
       </article>`
       )
@@ -341,38 +388,46 @@ export function renderReport(r, apiBase, section) {
   </div>
 
   <h3>Foundations to preserve</h3>
-  <p>${esc(r.curriculum.concepts.join(', ') || 'No catalog foundation matched. Faculty review is needed.')}</p>
+  <p>${esc(curriculum.concepts?.join(', ') || 'No catalog foundation matched. Faculty review is needed.')}</p>
 
   <details>
-    <summary>Curriculum evidence and original course outcomes (${r.curriculum.skills.length} skills detected in PDF)</summary>
-    ${r.curriculum.skills.map(s => `<p><strong>${esc(s.skill)}</strong> · p.${s.page}<br><em>${esc(s.excerpt)}</em></p>`).join('')}
-    ${r.curriculum.course_outcomes.map(co => `<p><strong>${esc(co.id)}</strong> · p.${co.page}: ${esc(co.statement)}</p>`).join('') || '<p>No explicit CO-numbered outcome lines detected.</p>'}
+    <summary>Curriculum evidence and original course outcomes (${curriculum.skills?.length || 0} skills detected in PDF)</summary>
+    ${(curriculum.skills || []).map(s => `<p><strong>${esc(s.skill)}</strong> · p.${s.page}<br><em>${esc(s.excerpt)}</em></p>`).join('')}
+    ${(curriculum.course_outcomes || []).map(co => `<p><strong>${esc(co.id)}</strong> · p.${co.page}: ${esc(co.statement)}</p>`).join('') || '<p>No explicit CO-numbered outcome lines detected.</p>'}
   </details>
 
   ${
-    r.curriculum.legacy_mentions.length
+    curriculum.legacy_mentions?.length
       ? `
     <details>
-      <summary>Legacy tooling mentions to review (${r.curriculum.legacy_mentions.length})</summary>
-      ${r.curriculum.legacy_mentions.map(x => `<p><strong>${esc(x.tool)}</strong> · p.${x.page}: <em>${esc(x.excerpt)}</em><br>${esc(x.rationale)}</p>`).join('')}
+      <summary>Legacy tooling mentions to review (${curriculum.legacy_mentions.length})</summary>
+      ${curriculum.legacy_mentions.map(x => `<p><strong>${esc(x.tool)}</strong> · p.${x.page}: <em>${esc(x.excerpt)}</em><br>${esc(x.rationale)}</p>`).join('')}
     </details>`
       : ''
   }
 
   <h3>Data quality and source coverage</h3>
-  ${bullets(r.market.sources.map(s => `${s.source}: ${s.status} (${s.fetched} postings fetched)`))}
-  <p>Excluded from analysis: ${esc(Object.entries(r.market.excluded).map(([k, v]) => `${k.replaceAll('_', ' ')}: ${v}`).join(' · '))}</p>
-  ${bullets(r.warnings)}
+  ${bullets((market.sources || []).map(s => `${esc(s?.source || 'Source')}: ${esc(s?.status || 'done')} (${Number(s?.fetched) || 0} postings fetched)`))}
+  <p>Excluded from analysis: ${
+    Object.keys(market.excluded || {}).length
+      ? esc(Object.entries(market.excluded).map(([k, v]) => `${k.replaceAll('_', ' ')}: ${v}`).join(' · '))
+      : 'None'
+  }</p>
+  ${bullets(warnings)}
 
   <details>
-    <summary>Job evidence (${r.jobs.length} usable postings)</summary>
-    ${r.jobs.map(j => `<p>${jobLink(j.url, j.title)} · ${esc(j.company)} · ${esc(j.site)}<br>${esc(j.location)} · Posted: ${esc(j.date_posted || 'unknown')}</p>`).join('')}
+    <summary>Job evidence (${jobs.length} usable postings)</summary>
+    ${
+      jobs.length
+        ? jobs.map(j => `<p>${jobLink(j.url, j.title)} · ${esc(j.company)} · ${esc(j.site)}<br>${esc(j.location)} · Posted: ${esc(j.date_posted || 'unknown')}</p>`).join('')
+        : '<p style="color:#7b8672; font-size:12px;">No individual job postings available in this sample.</p>'
+    }
   </details>
 
   <details>
     <summary>How this report is calculated and its limits</summary>
-    <p>${esc(r.methodology)}</p>
-    ${bullets(r.limitations)}
+    <p>${esc(r.methodology || '')}</p>
+    ${bullets(limitations)}
   </details>
   `;
 
@@ -383,30 +438,79 @@ export function renderReport(r, apiBase, section) {
   ];
 
   for (const { id, version, filename } of downloads) {
-    const btn = document.getElementById(id);
-    if (btn) {
+    const btn = section.querySelector(`#${id}`);
+    if (btn && r.report_id) {
       btn.onclick = () => {
-        const a = document.createElement('a');
-        a.href = getReportDownloadUrl(apiBase, r.report_id, version);
-        a.download = filename;
-        a.click();
+        try {
+          const downloadUrl = getReportDownloadUrl(apiBase, r.report_id, version);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } catch (err) {
+          console.error('Failed to trigger download', err);
+          const note = section.querySelector('.download-note');
+          if (note) {
+            note.textContent = 'Could not generate download link. Please verify the backend connection and retry.';
+            note.style.color = '#a44835';
+          }
+        }
       };
     }
   }
 
-  // Bind Chart Filter Controls
+  // Bind Chart Filter Controls and interactive bar clicks
   const chartControls = section.querySelectorAll('#chart-filter-controls button');
   const chartContent = section.querySelector('#chart-content');
+
+  function bindChartBarInteractions() {
+    if (!chartContent) return;
+    chartContent.querySelectorAll('.chart-bar-item').forEach(bar => {
+      bar.style.cursor = 'pointer';
+      const selectSkill = () => {
+        const skillName = bar.dataset.skill;
+        if (!skillName) return;
+        if (searchInput) {
+          searchInput.value = skillName;
+        }
+        tableFilterState.searchQuery = skillName;
+        tableFilterState.statusFilter = 'all';
+        tableFilterBtns.forEach(b => b.classList.toggle('active', b.dataset.tableFilter === 'all'));
+        updateTable();
+
+        const targetRow = Array.from(section.querySelectorAll('#skill-table-body tr')).find(
+          tr => tr.getAttribute('data-skill-name') === skillName
+        );
+        if (targetRow) {
+          targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetRow.classList.add('row-highlight');
+          setTimeout(() => targetRow.classList.remove('row-highlight'), 2000);
+        }
+      };
+      bar.addEventListener('click', selectSkill);
+      bar.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectSkill();
+        }
+      });
+    });
+  }
 
   chartControls.forEach(btn => {
     btn.addEventListener('click', () => {
       chartControls.forEach(b => b.classList.toggle('active', b === btn));
       const filter = btn.dataset.chartFilter;
       if (chartContent) {
-        chartContent.innerHTML = renderSkillDemandChart(r.skill_demand, totalJobs, filter);
+        chartContent.innerHTML = renderSkillDemandChart(skillDemand, totalJobs, filter);
+        bindChartBarInteractions();
       }
     });
   });
+
+  bindChartBarInteractions();
 
   // Bind Table Search & Filter Controls
   const searchInput = section.querySelector('#skill-search-input');
@@ -416,7 +520,7 @@ export function renderReport(r, apiBase, section) {
 
   function updateTable() {
     const filtered = filterSkillDemand(
-      r.skill_demand,
+      skillDemand,
       tableFilterState.searchQuery,
       tableFilterState.statusFilter
     );
@@ -443,6 +547,13 @@ export function renderReport(r, apiBase, section) {
       tableFilterState.searchQuery = e.target.value;
       updateTable();
     });
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && searchInput.value) {
+        searchInput.value = '';
+        tableFilterState.searchQuery = '';
+        updateTable();
+      }
+    });
   }
 
   tableFilterBtns.forEach(btn => {
@@ -467,7 +578,9 @@ export function renderReport(r, apiBase, section) {
 export function renderRoadmapView(report, container, onGoToUpload) {
   if (!container) return;
 
-  if (!report || !report.lab_patches || !report.lab_patches.length) {
+  const labs = Array.isArray(report?.lab_patches) ? report.lab_patches : [];
+
+  if (!report) {
     container.innerHTML = `
       <span class="tag">LEARNING ROADMAP</span>
       <h2>Your practical learning roadmap.</h2>
@@ -486,14 +599,32 @@ export function renderRoadmapView(report, container, onGoToUpload) {
     return;
   }
 
-  const labs = report.lab_patches;
+  if (!labs.length) {
+    container.innerHTML = `
+      <span class="tag">LEARNING ROADMAP</span>
+      <h2>Your practical learning roadmap.</h2>
+      <div class="empty-state-box">
+        <p style="font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px;">No supplemental lab patches required</p>
+        <p>All in-demand skills in this market sample were detected in your syllabus text. Your course outcomes already cover the top requirements for this role.</p>
+        <button class="primary-button" id="roadmap-go-overview" style="max-width: 260px; margin: 16px auto 0;">View Full Analysis in Overview <span>↗</span></button>
+      </div>
+    `;
+    const btn = container.querySelector ? container.querySelector('#roadmap-go-overview') : null;
+    if (btn && onGoToUpload) {
+      btn.onclick = onGoToUpload;
+    }
+    container.hidden = false;
+    container.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
   const concepts = report.curriculum?.concepts?.join(', ') || 'course foundations';
 
   container.innerHTML = `
     <div class="roadmap-hero">
       <span class="tag">LEARNING ROADMAP · SEQUENCED 40-MINUTE LAB EXTENSIONS</span>
       <h2>From syllabus theory to modern practice.</h2>
-      <p>Target role: <strong>${esc(report.role)}</strong> · Preserving ${esc(concepts)} from <em>${esc(report.filename)}</em></p>
+      <p>Target role: <strong>${esc(report.role || 'General')}</strong> · Preserving ${esc(concepts)} from <em>${esc(report.filename || 'syllabus')}</em></p>
     </div>
 
     <!-- Transparent Pedagogical Labeling -->
@@ -519,27 +650,27 @@ export function renderRoadmapView(report, container, onGoToUpload) {
           <article class="roadmap-step-card">
             <div class="step-header">
               <span class="step-num">STEP ${stepNum} · 40 MINUTES</span>
-              <span class="status-badge badge-gap">Extends ${esc(l.foundation)} (p.${l.page})</span>
+              <span class="status-badge badge-gap">Extends ${esc(l.foundation || 'foundation')} (p.${l.page || '?'})</span>
             </div>
             <h3 class="step-title">${esc(l.title)}</h3>
-            <p class="step-meta"><strong>Prerequisites:</strong> ${esc(l.prerequisites)}</p>
+            <p class="step-meta"><strong>Prerequisites:</strong> ${esc(l.prerequisites || 'Basic coursework prerequisites')}</p>
             ${outcomeText}
 
             <h4 style="margin: 14px 0 6px; font-size: 12px; color: var(--green);">Lab Tasks</h4>
-            ${bullets(l.tasks)}
+            ${bullets(l.tasks || [])}
 
             <h4 style="margin: 14px 0 6px; font-size: 12px; color: var(--green);">Suggested Rubric</h4>
             <div class="rubric-breakdown">
-              ${Object.entries(l.rubric)
+              ${Object.entries(l.rubric || {})
                 .map(([k, v]) => `<span class="rubric-pill"><strong>${esc(k)}</strong>: ${v}%</span>`)
                 .join('')}
             </div>
 
             <h4 style="margin: 14px 0 6px; font-size: 12px; color: var(--green);">Verification Checklist</h4>
-            ${bullets(l.verification_checklist)}
+            ${bullets(l.verification_checklist || [])}
 
             <div style="margin-top: 12px; padding: 10px 14px; background: #fbfcf8; border-left: 3px solid #bac9a6; font-size: 11px; line-height: 1.6; color: #626e57;">
-              <strong>Faculty Note:</strong> ${esc(l.faculty_notes)}
+              <strong>Faculty Note:</strong> ${esc(l.faculty_notes || 'Verify prerequisites and prepare environments before assigning.')}
             </div>
           </article>
           `;

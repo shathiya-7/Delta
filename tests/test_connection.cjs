@@ -204,3 +204,135 @@ test('error and timeout messages map correctly to user-facing strings', () => {
   assert.match(CONFIG.MESSAGES.NETWORK_INTERRUPTED, /connection to the analysis service was interrupted/);
   assert.equal(CONFIG.MESSAGES.UNEXPECTED_RESPONSE(502), 'The analysis server returned an unexpected response (HTTP 502). Check the backend terminal and retry.');
 });
+
+test('PDF validation accepts application/x-pdf, uppercase .PDF, and empty MIME type', () => {
+  assert.deepEqual(validatePdfFile({ name: 'CURRICULUM.PDF', size: 2048, type: 'application/pdf' }), { valid: true, error: null });
+  assert.deepEqual(validatePdfFile({ name: 'syllabus.pdf', size: 2048, type: 'application/x-pdf' }), { valid: true, error: null });
+  assert.deepEqual(validatePdfFile({ name: 'outline.pdf', size: 2048, type: '' }), { valid: true, error: null });
+});
+
+test('getReportDownloadUrl requires base URL and report ID', () => {
+  assert.throws(() => getReportDownloadUrl('', 'rep-1'), /Backend base URL and report ID are required/);
+  assert.throws(() => getReportDownloadUrl('http://127.0.0.1:8000', ''), /Backend base URL and report ID are required/);
+});
+
+test('filterSkillDemand gracefully handles items with missing or undefined properties', () => {
+  const edgeCaseSkills = [
+    { skill: 'Git', curriculum_status: 'mentioned' },
+    { skill: null, curriculum_status: 'not found' },
+    {},
+  ];
+  const results = filterSkillDemand(edgeCaseSkills, 'git', 'all');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].skill, 'Git');
+});
+
+test('renderReport renders defensively with minimal/empty report data without crashing', async () => {
+  const { renderReport } = await import('../js/render.js');
+  const dummySection = {
+    innerHTML: '',
+    hidden: true,
+    scrollIntoView: () => {},
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  };
+
+  const minimalReport = {
+    filename: 'minimal.pdf',
+    role: 'backend',
+    summary: {},
+    market: {},
+    curriculum: {},
+    skill_demand: [],
+    gaps: [],
+    lab_patches: [],
+    jobs: [],
+    warnings: [],
+  };
+
+  assert.doesNotThrow(() => {
+    renderReport(minimalReport, 'http://127.0.0.1:8000', dummySection);
+  });
+  assert.equal(dummySection.hidden, false);
+  assert.match(dummySection.innerHTML, /minimal\.pdf/);
+});
+
+test('renderReport handles skills with special characters (C++, Node.js, CI/CD) and assigns data-skill-name', async () => {
+  const { renderReport } = await import('../js/render.js');
+  const dummySection = {
+    innerHTML: '',
+    hidden: true,
+    scrollIntoView: () => {},
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  };
+
+  const reportWithSpecialSkills = {
+    filename: 'special.pdf',
+    role: 'fullstack',
+    summary: { analyzed_jobs: 10, detected_curriculum_skills: 3, missing_skills: 0 },
+    market: { sources: [{ source: 'LinkedIn', status: 'done', fetched: 10 }] },
+    curriculum: { concepts: ['OOP', 'Web'] },
+    skill_demand: [
+      { skill: 'C++', job_count: 5, share_percent: 50.0, curriculum_status: 'mentioned', evidence: [] },
+      { skill: 'Node.js', job_count: 6, share_percent: 60.0, curriculum_status: 'mentioned', evidence: [] },
+      { skill: 'CI/CD', job_count: 4, share_percent: 40.0, curriculum_status: 'not found', evidence: [] },
+    ],
+    gaps: [],
+    lab_patches: [],
+    jobs: [],
+    warnings: [],
+  };
+
+  assert.doesNotThrow(() => {
+    renderReport(reportWithSpecialSkills, 'http://127.0.0.1:8000', dummySection);
+  });
+  assert.match(dummySection.innerHTML, /data-skill-name="C\+\+"/);
+  assert.match(dummySection.innerHTML, /data-skill-name="Node\.js"/);
+  assert.match(dummySection.innerHTML, /data-skill-name="CI\/CD"/);
+});
+
+test('renderRoadmapView shows dedicated message when curriculum has 0 gaps', () => {
+  const dummyContainer = { innerHTML: '', hidden: true, scrollIntoView: () => {}, querySelector: () => null };
+  const mockReportNoGaps = {
+    role: 'Backend developer',
+    filename: 'complete.pdf',
+    lab_patches: [],
+  };
+
+  renderRoadmapView(mockReportNoGaps, dummyContainer);
+  assert.equal(dummyContainer.hidden, false);
+  assert.match(dummyContainer.innerHTML, /No supplemental lab patches required/);
+});
+
+test('renderReport handles report with null or empty market details cleanly without displaying undefined', async () => {
+  const { renderReport } = await import('../js/render.js');
+  const dummySection = {
+    innerHTML: '',
+    hidden: true,
+    scrollIntoView: () => {},
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  };
+
+  const reportWithNulls = {
+    filename: 'test.pdf',
+    role: 'backend',
+    summary: null,
+    market: { sources: null, excluded: null },
+    curriculum: null,
+    skill_demand: [],
+    gaps: null,
+    lab_patches: null,
+    jobs: [],
+    warnings: null,
+  };
+
+  assert.doesNotThrow(() => {
+    renderReport(reportWithNulls, 'http://127.0.0.1:8000', dummySection);
+  });
+  assert.doesNotMatch(dummySection.innerHTML, /undefined/);
+  assert.match(dummySection.innerHTML, /Excluded from analysis: None/);
+});
+
+

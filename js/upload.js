@@ -10,7 +10,9 @@ export function validatePdfFile(file) {
   if (!file) {
     return { valid: false, error: null };
   }
-  if (!/\.pdf$/i.test(file.name) || (file.type && file.type !== 'application/pdf')) {
+  const name = file.name || '';
+  const type = (file.type || '').toLowerCase();
+  if (!/\.pdf$/i.test(name) || (type && !['application/pdf', 'application/x-pdf'].includes(type))) {
     return { valid: false, error: CONFIG.MESSAGES.FILE_NOT_PDF };
   }
   if (file.size > CONFIG.LIMITS.MAX_FILE_SIZE_BYTES) {
@@ -88,10 +90,14 @@ export function initUpload(elements, callbacks = {}) {
     if (callbacks.onFileChange) callbacks.onFileChange(selectedFile);
   }
 
-  dropZone.addEventListener('click', () => input.click());
+  dropZone.addEventListener('click', () => {
+    if (callbacks.isBusy && callbacks.isBusy()) return;
+    input.click();
+  });
   dropZone.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      if (callbacks.isBusy && callbacks.isBusy()) return;
       input.click();
     }
   });
@@ -105,6 +111,7 @@ export function initUpload(elements, callbacks = {}) {
   ['dragenter', 'dragover'].forEach(event => {
     dropZone.addEventListener(event, e => {
       e.preventDefault();
+      if (callbacks.isBusy && callbacks.isBusy()) return;
       dropZone.classList.add('dragging');
     });
   });
@@ -117,6 +124,7 @@ export function initUpload(elements, callbacks = {}) {
   });
 
   dropZone.addEventListener('drop', e => {
+    if (callbacks.isBusy && callbacks.isBusy()) return;
     if (!e.dataTransfer || !e.dataTransfer.files) return;
     if (e.dataTransfer.files.length !== 1) {
       if (errorEl) errorEl.textContent = CONFIG.MESSAGES.SINGLE_FILE_ONLY;
