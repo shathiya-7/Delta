@@ -166,8 +166,85 @@ export function initApp() {
     input.disabled = true;
     dropZone.setAttribute('aria-disabled', 'true');
     errorEl.innerHTML = '';
-    resultsEl.hidden = true;
-    statusEl.textContent = CONFIG.MESSAGES.ANALYSIS_RUNNING;
+
+    // Loading button state
+    analyzeBtn.innerHTML = `
+      <span class="btn-spinner" aria-hidden="true"></span>
+      <span>Analyzing curriculum...</span>
+    `;
+
+    // Multi-stage animated loading status
+    const loadingStages = [
+      { main: 'Parsing curriculum & extracting skills', sub: 'In-memory PDF text extraction and course outcome mapping' },
+      { main: 'Scanning live international job demand', sub: 'Benchmarking real market postings for junior roles' },
+      { main: 'Consulting Gemini AI curriculum intelligence', sub: 'Evaluating modernity index and tailoring project proof' }
+    ];
+    let stageIdx = 0;
+
+    const renderLoadingStage = (idx) => {
+      const stage = loadingStages[idx % loadingStages.length];
+      statusEl.innerHTML = `
+        <div class="analysis-loader" role="status" aria-live="polite">
+          <div class="loader-spinner" aria-hidden="true"></div>
+          <div class="loader-text-group">
+            <span class="loader-primary-msg">
+              <span>${esc(stage.main)}</span>
+              <span class="loading-dots" aria-hidden="true"></span>
+            </span>
+            <span class="loader-secondary-msg">${esc(stage.sub)}</span>
+          </div>
+        </div>
+      `;
+    };
+
+    renderLoadingStage(stageIdx);
+    const stageTimer = setInterval(() => {
+      stageIdx++;
+      renderLoadingStage(stageIdx);
+    }, 2500);
+
+    // Render prominent animated loading card directly in results section
+    resultsEl.hidden = false;
+    resultsEl.innerHTML = `
+      <div class="results-loading-card border-glow" aria-label="Analyzing curriculum">
+        <div class="loading-orb-container">
+          <div class="loading-orb-glow"></div>
+          <div class="loading-orb-spinner"></div>
+          <span class="loading-orb-icon">✳</span>
+        </div>
+        <h3 class="loading-title">Analyzing Curriculum Intelligence...</h3>
+        <p class="loading-subtitle">Cross-referencing your syllabus with live hiring demand and Gemini AI</p>
+
+        <div class="loading-steps-list">
+          <div class="loading-step active" id="step-pdf">
+            <span class="step-dot"></span>
+            <span>Parsing syllabus text & extracting course outcomes</span>
+          </div>
+          <div class="loading-step" id="step-market">
+            <span class="step-dot"></span>
+            <span>Benchmarking live job market postings</span>
+          </div>
+          <div class="loading-step" id="step-ai">
+            <span class="step-dot"></span>
+            <span>Consulting Gemini AI for industry modernity critique</span>
+          </div>
+        </div>
+
+        <div class="loading-shimmer-bar">
+          <div class="loading-shimmer-wave"></div>
+        </div>
+      </div>
+    `;
+
+    const stepMarketTimer = setTimeout(() => {
+      const el = document.getElementById('step-market');
+      if (el) el.classList.add('active');
+    }, 1200);
+
+    const stepAiTimer = setTimeout(() => {
+      const el = document.getElementById('step-ai');
+      if (el) el.classList.add('active');
+    }, 2400);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), CONFIG.LIMITS.ANALYSIS_TIMEOUT_MS);
@@ -186,9 +263,14 @@ export function initApp() {
       }
 
       renderReport(data, base, resultsEl);
-      initBorderGlow(resultsEl.querySelectorAll('.chart-card, .result-card'));
-      statusEl.textContent = CONFIG.MESSAGES.ANALYSIS_COMPLETE;
+      initBorderGlow(resultsEl.querySelectorAll('.chart-card, .result-card, .ai-insights-card'));
+      statusEl.innerHTML = '';
     } catch (error) {
+      clearInterval(stageTimer);
+      clearTimeout(stepMarketTimer);
+      clearTimeout(stepAiTimer);
+      resultsEl.hidden = true;
+      resultsEl.innerHTML = '';
       const isTimeout = error.name === 'AbortError';
       const isNetwork = error.message === 'Failed to fetch';
       const msg = isTimeout
@@ -210,10 +292,14 @@ export function initApp() {
         retryBtn.addEventListener('click', performAnalysis);
       }
 
-      statusEl.textContent = '';
+      statusEl.innerHTML = '';
     } finally {
+      clearInterval(stageTimer);
+      clearTimeout(stepMarketTimer);
+      clearTimeout(stepAiTimer);
       clearTimeout(timeout);
       busy = false;
+      analyzeBtn.innerHTML = `Analyze curriculum <span>↗</span>`;
       analyzeBtn.disabled = !uploadManager.getSelectedFile();
       removeBtn.disabled = false;
       input.disabled = false;
