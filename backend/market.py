@@ -1,5 +1,5 @@
 """Bounded, isolated JobSpy collection. Partial outages remain visible."""
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import multiprocessing
@@ -100,14 +100,20 @@ def collect_market(role):
             for stale_key in [k for k,v in CACHE.items() if time.monotonic()-v[0] >= TTL]:
                 CACHE.pop(stale_key)
         records, statuses, warnings = [], [], []
-        ctx = multiprocessing.get_context('spawn')
         try:
             worker_count = int(os.environ.get('JOBSPY_WORKERS', '4'))
         except ValueError:
             raise ValueError('JOBSPY_WORKERS must be an integer from 1 to 4.') from None
         if not 1 <= worker_count <= 4:
             raise ValueError('JOBSPY_WORKERS must be an integer from 1 to 4.')
-        pool = ProcessPoolExecutor(max_workers=worker_count, mp_context=ctx)
+
+        # Use ProcessPoolExecutor where supported, or ThreadPoolExecutor for serverless environments (e.g. AWS Lambda / Vercel)
+        # where /dev/shm is missing and POSIX semaphores raise FileNotFoundError
+        try:
+            ctx = multiprocessing.get_context('spawn')
+            pool = ProcessPoolExecutor(max_workers=worker_count, mp_context=ctx)
+        except (FileNotFoundError, OSError, PermissionError):
+            pool = ThreadPoolExecutor(max_workers=worker_count)
         futures = {pool.submit(scrape_board, board, ROLES[role][0], country): (board, country) for board, country in SEARCHES}
         completed = set()
         try:
@@ -140,13 +146,20 @@ def collect_market(role):
             # Python 3.14 can kill timed-out workers; older runtimes use process termination.
             if any(not f.done() for f in futures):
                 if hasattr(pool, 'terminate_workers'):
-                    pool.terminate_workers()
-                else:
+                    try:
+                        pool.terminate_workers()
+                    except Exception:
+                        pass
+                elif hasattr(pool, '_processes'):
                     for process in (getattr(pool, '_processes', {}) or {}).values():
-                        process.terminate()
-                    pool.shutdown(wait=False, cancel_futures=True)
-            else:
+                        try:
+                            process.terminate()
+                        except Exception:
+                            pass
+            try:
                 pool.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
         jobs, excluded = normalize(records, role)
         result = {'jobs': jobs, 'focus': 'International', 'location_query': 'Across countries', 'searched_markets': [country for _, country in SEARCHES], 'role_query': ROLES[role][0],
             'collected_at': datetime.now(timezone.utc).isoformat(), 'cached': False, 'cache_ttl_seconds': TTL,
