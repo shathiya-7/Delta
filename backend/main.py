@@ -19,12 +19,12 @@ from .pdf_report import generate_pdf, generate_summary_pdf
 
 app = FastAPI(title='Delta curriculum analysis')
 API_VERSION = '1.0.0'
-# Allow local development previews to use the local API; do not enable arbitrary websites.
+# Allow local development previews and Vercel deployments to use the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r'http://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?',
-    allow_methods=['GET', 'POST'],
-    allow_headers=['Content-Type'],
+    allow_origin_regex=r'https?://(?:localhost|127\.0\.0\.1|\[::1\]|.*\.vercel\.app)(?::\d+)?',
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 
