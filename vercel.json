@@ -9,6 +9,10 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/index.py?__vercel_path=/api/$1"
+    },
+    {
+      "source": "/js/(.*)",
+      "destination": "/api/index.py?__vercel_path=/js/$1"
     }
   ]
 }
