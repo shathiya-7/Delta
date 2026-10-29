@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from .contracts import HealthResponse, RoleOption
 from .engine import parse_pdf, build_report
+from .ai import generate_ai_analysis
 from .market import ROLES, collect_market
 from .pdf_report import generate_pdf, generate_summary_pdf
 
@@ -94,6 +95,13 @@ async def analyze(file: UploadFile = File(...), role: str = Form('backend')):
         curriculum = await run_in_threadpool(parse_pdf, data)
         market = await run_in_threadpool(collect_market, role)
         report = build_report(curriculum, market, ROLES[role][0])
+        ai_insights = await run_in_threadpool(generate_ai_analysis, curriculum, ROLES[role][0])
+        report['ai_insights'] = ai_insights
+        report['ai'] = {
+            'available': ai_insights.get('status') == 'ready',
+            'explanations': [ai_insights.get('data', {}).get('executive_critique', '')] if ai_insights.get('status') == 'ready' else [],
+            'roadmap': [ai_insights.get('data', {}).get('recommended_project', '')] if ai_insights.get('status') == 'ready' else [],
+        }
         report['jobs'] = [{k:v for k,v in j.items() if k != 'analysis_text'} for j in market['jobs']]
         report['filename'] = file.filename
         pdf = await run_in_threadpool(generate_pdf, report)

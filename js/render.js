@@ -209,6 +209,70 @@ function renderSkillTableRows(items, totalJobs) {
 }
 
 /**
+ * Renders the AI Curriculum Intelligence card when AI insights are ready.
+ *
+ * @param {object} ai - The AI insights object from backend
+ * @returns {string} HTML markup for the AI card, or empty string if unavailable
+ */
+export function renderAIInsightsCard(ai) {
+  if (!ai || ai.status !== 'ready' || !ai.data) {
+    return '';
+  }
+  const data = ai.data;
+  const score = Number(data.modernity_score) || 75;
+  const missing = Array.isArray(data.top_missing_skills) ? data.top_missing_skills : [];
+
+  return `
+    <article class="ai-insights-card border-glow" aria-label="AI Curriculum Intelligence">
+      <div class="ai-header">
+        <div class="ai-badge">
+          <span class="ai-spark">✳</span>
+          <span>AI CURRICULUM INTELLIGENCE</span>
+          <span class="ai-model-tag">${esc(ai.model || 'gemini')}</span>
+        </div>
+        <div class="ai-score-badge">
+          <span class="ai-score-label">MODERNITY INDEX</span>
+          <strong class="ai-score-num">${score}<span>/100</span></strong>
+        </div>
+      </div>
+
+      <h3 class="ai-title">${esc(data.verdict_title || 'Curriculum Industry Alignment')}</h3>
+      <p class="ai-critique">${esc(data.executive_critique || '')}</p>
+
+      <div class="ai-grid">
+        ${data.recommended_project ? `
+          <div class="ai-box ai-project-box">
+            <div class="ai-box-label">🎯 RECOMMENDED PORTFOLIO PROOF</div>
+            <p>${esc(data.recommended_project)}</p>
+          </div>
+        ` : ''}
+
+        ${data.quick_40min_lab ? `
+          <div class="ai-box ai-lab-box">
+            <div class="ai-box-label">⚡ 40-MINUTE GAP PATCH LAB</div>
+            <p>${esc(data.quick_40min_lab)}</p>
+          </div>
+        ` : ''}
+      </div>
+
+      ${missing.length ? `
+        <div class="ai-missing-list">
+          <div class="ai-missing-title">Key Industry Expectations to Address:</div>
+          <div class="ai-missing-tags">
+            ${missing.map(m => `
+              <div class="ai-missing-item" title="${esc(m.why_it_matters || '')}">
+                <span class="ai-missing-dot"></span>
+                <span><strong>${esc(m.skill || '')}</strong>: ${esc(m.why_it_matters || '')}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </article>
+  `;
+}
+
+/**
  * Renders the analysis report into the target container element and wires PDF download handlers.
  *
  * @param {object} r - Full analysis report data returned from backend
@@ -244,12 +308,16 @@ export function renderReport(r, apiBase, section) {
   const totalSkills = skillDemand.length;
 
   const formattedCollectedAt = formatDate(market.collected_at || r.generated_at);
+  const isAi = Boolean(r.ai_insights && r.ai_insights.status === 'ready');
+  const codeword = isAi ? '' : ' #';
 
   section.innerHTML = `
-  <span class="tag">INTERNATIONAL · LIVE JOB SAMPLE${market.cached ? ' · CACHED' : ''}</span>
-  <h2>Your curriculum, compared with hiring demand.</h2>
-  <p>${esc(r.filename || 'Curriculum')} · ${esc(r.role || 'Role')} · ${esc(market.location_query || 'International sample')}<br>
+  <span class="tag">INTERNATIONAL · LIVE JOB SAMPLE${market.cached ? ' · CACHED' : ''}${isAi ? '' : ' · <span class="ai-codeword">#</span>'}</span>
+  <h2>Your curriculum, compared with hiring demand.${codeword ? ` <span class="ai-codeword" title="Standard Analysis (No AI)">#</span>` : ''}</h2>
+  <p>${esc(r.filename || 'Curriculum')}${codeword ? ' #' : ''} · ${esc(r.role || 'Role')} · ${esc(market.location_query || 'International sample')}<br>
   Collected ${esc(formattedCollectedAt)} · ${curriculum.page_count || 1} PDF pages</p>
+
+  ${renderAIInsightsCard(r.ai_insights)}
 
   <div class="report-downloads" aria-label="Download analysis reports">
     <button id="download-report" class="primary-button" ${!r.report_id ? 'disabled' : ''}>Download full report (PDF) <span>↓</span></button>

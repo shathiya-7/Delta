@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 let resolveAnalysisServer, analyzeCurriculum, getReportDownloadUrl;
 let CONFIG;
 let validatePdfFile;
-let esc, bullets, jobLink, filterSkillDemand, renderSkillDemandChart, renderRoadmapView;
+let esc, bullets, jobLink, filterSkillDemand, renderSkillDemandChart, renderRoadmapView, renderAIInsightsCard;
 
 before(async () => {
   const apiModule = await import('../js/api.js');
@@ -23,6 +23,7 @@ before(async () => {
   filterSkillDemand = renderModule.filterSkillDemand;
   renderSkillDemandChart = renderModule.renderSkillDemandChart;
   renderRoadmapView = renderModule.renderRoadmapView;
+  renderAIInsightsCard = renderModule.renderAIInsightsCard;
 });
 
 const healthy = () => ({
@@ -1019,4 +1020,126 @@ test('analyzeCurriculum extracts message from backend error envelope', async () 
     /Choose a supported role\./
   );
 });
+
+test('renderAIInsightsCard returns empty string when ai insights is missing, null, or not ready', () => {
+  assert.equal(renderAIInsightsCard(null), '');
+  assert.equal(renderAIInsightsCard(undefined), '');
+  assert.equal(renderAIInsightsCard({ status: 'unavailable' }), '');
+  assert.equal(renderAIInsightsCard({ status: 'ready', data: null }), '');
+});
+
+test('renderAIInsightsCard renders full card with executive critique, score, and labs when status is ready', () => {
+  const mockAi = {
+    status: 'ready',
+    model: 'gemini-3.5-flash',
+    data: {
+      verdict_title: 'Solid Core, Urgent Cloud Modernization Needed',
+      executive_critique: 'The syllabus covers fundamental data structures well but lacks modern distributed systems.',
+      modernity_score: 82,
+      top_missing_skills: [
+        { skill: 'Docker', why_it_matters: 'Containerization is table stakes for backend services' },
+        { skill: 'Kafka', why_it_matters: 'Event streaming needed for high-throughput microservices' }
+      ],
+      recommended_project: 'Build a distributed URL shortener using Redis and Kafka event queues.',
+      quick_40min_lab: 'Containerize a Node/Go microservice and write a compose file with PostgreSQL.'
+    }
+  };
+
+  const html = renderAIInsightsCard(mockAi);
+  assert.ok(html.includes('ai-insights-card'));
+  assert.ok(html.includes('AI CURRICULUM INTELLIGENCE'));
+  assert.ok(html.includes('gemini-3.5-flash'));
+  assert.ok(html.includes('82'));
+  assert.ok(html.includes('Solid Core, Urgent Cloud Modernization Needed'));
+  assert.ok(html.includes('The syllabus covers fundamental data structures well'));
+  assert.ok(html.includes('RECOMMENDED PORTFOLIO PROOF'));
+  assert.ok(html.includes('distributed URL shortener'));
+  assert.ok(html.includes('40-MINUTE GAP PATCH LAB'));
+  assert.ok(html.includes('Containerize a Node/Go microservice'));
+  assert.ok(html.includes('Docker'));
+  assert.ok(html.includes('Containerization is table stakes'));
+});
+
+test('renderAIInsightsCard sanitizes untrusted XSS in AI fields', () => {
+  const xssAi = {
+    status: 'ready',
+    model: '<script>alert(1)</script>',
+    data: {
+      verdict_title: '<img src=x onerror=alert(2)>',
+      executive_critique: '"><script>exploit()</script>',
+      modernity_score: 90,
+      top_missing_skills: [
+        { skill: '<b>XSS</b>', why_it_matters: '<script>' }
+      ],
+      recommended_project: '<script>bad()</script>',
+      quick_40min_lab: '<iframe src="bad.com"></iframe>'
+    }
+  };
+
+  const html = renderAIInsightsCard(xssAi);
+  assert.ok(!html.includes('<script>'));
+  assert.ok(!html.includes('<iframe'));
+  assert.ok(!html.includes('<img'));
+  assert.ok(!html.includes('<b>XSS</b>'));
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(html.includes('&lt;img src=x onerror=alert(2)&gt;'));
+  assert.ok(html.includes('&lt;b&gt;XSS&lt;/b&gt;'));
+});
+
+test('renderReport enforces AI codeword contract: displays "#" when no AI, and none when AI is ready', async () => {
+  const { renderReport } = await import('../js/render.js');
+  const section = {
+    innerHTML: '',
+    hidden: true,
+    scrollIntoView: () => {},
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  };
+
+  // Case 1: No AI / fallback
+  const reportNoAi = {
+    filename: 'syllabus.pdf',
+    role: 'backend',
+    summary: {},
+    market: {},
+    curriculum: {},
+    skill_demand: [],
+    gaps: [],
+    lab_patches: [],
+    jobs: [],
+    warnings: [],
+    ai_insights: { status: 'disabled' }
+  };
+  renderReport(reportNoAi, 'http://127.0.0.1:8000', section);
+  assert.ok(section.innerHTML.includes('ai-codeword'));
+  assert.ok(section.innerHTML.includes('#'));
+
+  // Case 2: AI is ready
+  const reportWithAi = {
+    filename: 'syllabus.pdf',
+    role: 'backend',
+    summary: {},
+    market: {},
+    curriculum: {},
+    skill_demand: [],
+    gaps: [],
+    lab_patches: [],
+    jobs: [],
+    warnings: [],
+    ai_insights: {
+      status: 'ready',
+      model: 'gemini-3.5-flash',
+      data: {
+        verdict_title: 'Solid Core',
+        executive_critique: 'Good alignment.',
+        modernity_score: 85
+      }
+    }
+  };
+  renderReport(reportWithAi, 'http://127.0.0.1:8000', section);
+  assert.ok(!section.innerHTML.includes('ai-codeword'));
+  assert.ok(!section.innerHTML.includes('Your curriculum, compared with hiring demand. #'));
+  assert.ok(!section.innerHTML.includes('LIVE JOB SAMPLE · #'));
+});
+
 
