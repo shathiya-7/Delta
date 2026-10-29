@@ -145,8 +145,16 @@ def download_pdf(report_id: str, version: Literal['full', 'summary'] = 'full'):
 def index():
     return FileResponse(ROOT / 'index.html')
 
+@app.get('/js/{file_path:path}')
+def serve_js(file_path: str):
+    target = ROOT / 'js' / file_path
+    if target.exists() and target.is_file():
+        return FileResponse(target, media_type='application/javascript')
+    raise HTTPException(404)
+
 @app.get('/{asset}')
 def asset(asset: str):
     if asset not in {'app.js', 'styles.css'}:
         raise HTTPException(404)
-    return FileResponse(ROOT / asset)
+    media_type = 'application/javascript' if asset.endswith('.js') else 'text/css'
+    return FileResponse(ROOT / asset, media_type=media_type)
