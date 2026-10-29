@@ -26,11 +26,19 @@ export async function resolveAnalysisServer(signal, options = {}) {
 
   if (loopback && origin !== defaultBackend) {
     candidates.push(defaultBackend);
+    if (hostname === 'localhost' && defaultBackend.includes('127.0.0.1')) {
+      const localhostBackend = defaultBackend.replace('127.0.0.1', 'localhost');
+      if (!candidates.includes(localhostBackend)) {
+        candidates.push(localhostBackend);
+      }
+    }
   }
+
+  const acceptedServices = CONFIG.HEALTH_CHECK.ACCEPTED_SERVICES || [CONFIG.HEALTH_CHECK.EXPECTED_SERVICE];
 
   for (const base of candidates) {
     try {
-      const response = await fetchFn(`${base}${CONFIG.ENDPOINTS.HEALTH}`, { signal, cache: 'no-store' });
+      const response = await fetchFn(`${base}${CONFIG.ENDPOINTS.HEALTH}`, { signal });
       if (!response.ok) continue;
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) continue;
@@ -38,7 +46,7 @@ export async function resolveAnalysisServer(signal, options = {}) {
       const health = await response.json();
       if (
         health.status === CONFIG.HEALTH_CHECK.EXPECTED_STATUS &&
-        health.service === CONFIG.HEALTH_CHECK.EXPECTED_SERVICE
+        (acceptedServices.includes(health.service) || health.service === CONFIG.HEALTH_CHECK.EXPECTED_SERVICE)
       ) {
         return base;
       }
@@ -83,7 +91,8 @@ export async function analyzeCurriculum(file, role, signal, apiBase, options = {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(typeof data.detail === 'string' ? data.detail : CONFIG.MESSAGES.DEFAULT_ERROR);
+    const errorMsg = data?.error?.message || (typeof data.detail === 'string' ? data.detail : CONFIG.MESSAGES.DEFAULT_ERROR);
+    throw new Error(errorMsg);
   }
 
   return data;

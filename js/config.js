@@ -13,7 +13,8 @@ export const CONFIG = {
 
   HEALTH_CHECK: {
     EXPECTED_STATUS: 'ok',
-    EXPECTED_SERVICE: 'bridgelabs',
+    EXPECTED_SERVICE: 'delta',
+    ACCEPTED_SERVICES: ['delta', 'bridgelabs'],
   },
 
   LIMITS: {

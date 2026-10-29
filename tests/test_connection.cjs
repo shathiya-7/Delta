@@ -953,9 +953,70 @@ test('Theme toggle toggles data-theme attribute and persists in storage', async 
   assert.equal(mockLocalStorage.getItem('delta_theme'), 'dark');
 });
 
+test('resolveAnalysisServer recognizes Delta FastAPI health contract service: delta', async () => {
+  const deltaHealthy = () => ({
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => ({ status: 'ok', service: 'delta', version: '1.0.0' }),
+  });
 
+  const urls = [];
+  const resolve = setup(async url => {
+    urls.push(url);
+    return url.startsWith('http://127.0.0.1:5500') ? { ok: false, status: 404 } : deltaHealthy();
+  });
 
+  const base = await resolve(new AbortController().signal);
+  assert.equal(base, 'http://127.0.0.1:8000');
+  assert.deepEqual(urls, ['http://127.0.0.1:5500/api/health', 'http://127.0.0.1:8000/api/health']);
+});
 
+test('resolveAnalysisServer supports localhost origin and fallback to localhost:8000', async () => {
+  const deltaHealthy = () => ({
+    ok: true,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => ({ status: 'ok', service: 'delta', version: '1.0.0' }),
+  });
 
+  const urls = [];
+  const resolve = setup(
+    async url => {
+      urls.push(url);
+      if (url === 'http://localhost:5500/api/health' || url === 'http://127.0.0.1:8000/api/health') {
+        return { ok: false, status: 404 };
+      }
+      return deltaHealthy();
+    },
+    'http://localhost:5500'
+  );
 
+  const base = await resolve(new AbortController().signal);
+  assert.equal(base, 'http://localhost:8000');
+  assert.deepEqual(urls, [
+    'http://localhost:5500/api/health',
+    'http://127.0.0.1:8000/api/health',
+    'http://localhost:8000/api/health',
+  ]);
+});
+
+test('analyzeCurriculum extracts message from backend error envelope', async () => {
+  const mockFetch = async () => ({
+    ok: false,
+    status: 422,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => ({
+      error: {
+        code: 'invalid_request',
+        message: 'Choose a supported role.',
+        retryable: false,
+      },
+    }),
+  });
+
+  const dummyPdf = { name: 'test.pdf', size: 500, type: 'application/pdf' };
+  await assert.rejects(
+    analyzeCurriculum(dummyPdf, 'unsupported', new AbortController().signal, 'http://127.0.0.1:8000', { fetch: mockFetch }),
+    /Choose a supported role\./
+  );
+});
 
